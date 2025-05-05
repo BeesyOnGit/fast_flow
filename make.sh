@@ -1,0 +1,1 @@
+sudo rm /usr/local/bin/watcher && cargo build --release && sudo cp ./target/release/watcher /usr/local/bin/ && sudo chmod +x /usr/local/bin/watcher

@@ -1,0 +1,91 @@
+o fix the "Unit watcher.service could not be found" error, you need to create and enable a systemd service for your watcher application. Here's how to do it step by step:
+
+1. Create a systemd Service File
+Create a new service file at /etc/systemd/system/watcher.service:
+
+bash
+sudo nano /etc/systemd/system/watcher.service
+Paste the following configuration (adjust paths as needed):
+
+ini
+[Unit]
+Description=Watcher Background Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/local/bin/watcher procede
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+Key Settings:
+Type=simple → Runs as a foreground process (use forking if your app daemonizes itself).
+
+Restart=always → Auto-restarts if the process crashes.
+
+User=root → Runs as root (change to a less privileged user if possible).
+
+ExecStart → Must point to your watcher binary.
+
+2. Reload systemd & Start the Service
+bash
+# Reload systemd to detect the new service
+sudo systemctl daemon-reload
+
+# Start the service
+sudo systemctl start watcher
+
+# Enable auto-start on boot
+sudo systemctl enable watcher
+
+# Check status (should now show as active)
+sudo systemctl status watcher
+3. Verify Logs
+If your app logs to a file (/tmp/watcher_counter.log), check it:
+
+bash
+tail -f /tmp/watcher_counter.log
+Or use journalctl for systemd logs:
+
+bash
+sudo journalctl -u watcher -f
+4. Common Fixes
+If the service fails:
+
+Check Executable Path:
+
+bash
+ls -l /usr/local/bin/watcher  # Ensure binary exists and is executable
+Debug Mode:
+
+bash
+sudo /usr/local/bin/watcher procede  # Run manually to check for errors
+Permissions:
+
+bash
+sudo chmod +x /usr/local/bin/watcher
+5. (Optional) Alternative: Run as Non-Root User
+For security, avoid running as root:
+
+Create a dedicated user:
+
+bash
+sudo useradd -r -s /bin/false watcheruser
+Update service file (User=watcheruser).
+
+Ensure log files are writable:
+
+bash
+sudo chown watcheruser /tmp/watcher_counter.log
+Final Notes
+Logging: Redirect logs to /var/log/watcher.log for better management.
+
+PID File: If using /tmp/watcher.pid, ensure the service user has write permissions.
+
+Dependencies: If your app needs network/database access, add After=postgresql.service (for example) in the [Unit] section.
+
+Now sudo systemctl status watcher should show the service as active (running). 🚀
