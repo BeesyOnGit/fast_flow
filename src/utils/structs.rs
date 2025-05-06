@@ -30,5 +30,10 @@ pub struct ConfigArgs {
 pub struct ConfigFile {
     pub repo: String,
     pub build: Vec<String>,
-    pub mouve: Vec<String>,
+    pub mouve: Vec<FromTo>,
+}
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub struct FromTo {
+    pub from: String,
+    pub to: String,
 }

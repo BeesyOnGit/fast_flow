@@ -1,10 +1,9 @@
-use crate::utils::{
-    content::config_example,
-    structs::ConfigFile,
-    utils::{read_from_file_ut, write_to_file_ut},
-};
+use crate::utils::{content::config_example, structs::ConfigFile, utils::load_file_parsed};
 
-use super::utils::{check_dir_exist_or_create, execute_commande, extract_repo_name, load_config};
+use super::utils::{
+    check_dir_exist_or_create, execute_commande, extract_repo_info, read_from_file_ut,
+    write_to_file_ut,
+};
 
 pub fn init_config(name: String, path: &str) -> () {
     let config_path = format!("{path}/{name}.config.json");
@@ -28,7 +27,7 @@ pub fn init_config(name: String, path: &str) -> () {
 }
 
 pub async fn watch_config_repo(name: String, work_dir: &String, config_path: &str) -> () {
-    let config = match load_config(&name, config_path).await {
+    let config = match load_file_parsed::<ConfigFile>(&name, config_path).await {
         Ok(conf) => conf,
         Err(err) => {
             println!("{}", err);
@@ -40,16 +39,8 @@ pub async fn watch_config_repo(name: String, work_dir: &String, config_path: &st
     // check if workdir exist else create
     check_dir_exist_or_create(&format!("{}/exmaple", &work_dir));
 
-    // clone repository in local
-    match execute_commande(&format!("cd {work_dir} && git clone {repo}")).await {
-        Ok(_) => println!("cloned repository {repo}"),
-        Err(err) => {
-            println!("{}", err);
-            return;
-        }
-    }
-
-    let folder_name = match extract_repo_name(&repo) {
+    // extract the user name and repo
+    let repo_info = match extract_repo_info(&repo) {
         Some(rep) => rep,
         None => {
             println!("error while parsing your github repo to extract the name, check it");
@@ -57,6 +48,21 @@ pub async fn watch_config_repo(name: String, work_dir: &String, config_path: &st
             return;
         }
     };
+    let (username, folder_name) = repo_info;
+
+    // clone repository in local
+    match execute_commande(&format!(
+        "cd {work_dir} && git clone git@github.com:{}/{}.git",
+        &username, &folder_name
+    ))
+    .await
+    {
+        Ok(_) => println!("cloned repository {repo}"),
+        Err(err) => {
+            println!("{}", err);
+            return;
+        }
+    }
 
     // Executing build
 
@@ -70,7 +76,8 @@ pub async fn watch_config_repo(name: String, work_dir: &String, config_path: &st
         {
             Ok(_) => println!("{command} : commande success "),
             Err(err) => {
-                let _ = execute_commande(&format!("cd {} && rm -rf {}", &work_dir, &repo)).await;
+                let _ =
+                    execute_commande(&format!("cd {} && rm -rf {}", &work_dir, &folder_name)).await;
                 println!("{}", err);
                 return;
             }
@@ -80,20 +87,23 @@ pub async fn watch_config_repo(name: String, work_dir: &String, config_path: &st
 
     println!("Starting Moving Process");
     for command in mouve {
+        check_dir_exist_or_create(&command.to);
+
         match execute_commande(&format!(
-            "cd {}/{} && {}",
-            &work_dir, &folder_name, &command
+            "cd {}/{} && cp {} {}",
+            &work_dir, &folder_name, &command.from, &command.to
         ))
         .await
         {
-            Ok(_) => println!("{command} : commande success "),
+            Ok(_) => println!("moving {} : commande success ", &command.from),
             Err(err) => {
-                let _ = execute_commande(&format!("cd {} && rm -rf {}", &work_dir, &repo)).await;
+                let _ =
+                    execute_commande(&format!("cd {} && rm -rf {}", &work_dir, &folder_name)).await;
                 println!("{}", err);
                 return;
             }
         }
     }
-    let _ = execute_commande(&format!("cd {} && rm -rf {}", &work_dir, &repo)).await;
+    let _ = execute_commande(&format!("cd {} && rm -rf {}", &work_dir, &folder_name)).await;
     return ();
 }

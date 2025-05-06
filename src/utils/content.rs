@@ -1,33 +1,29 @@
 pub fn config_example() -> String {
     return format!(
         "{{
-    // BUILD INSTRUCTIONS
-    // Array of shell commands to compile/package application components
-    // Recommendation: Use one entry per microservice/components (frontend/backend/CDN)
-    // Each command should be idempotent and environment-agnostic
-    \"build\": [],
+    // BUILD CONFIGURATION
+    // Array of shell commands to compile the application
+    // Executed in sequence from the repository root
+    \"build\": [
+        \"cargo build --release\"  // example Rust release build or npm run build
+    ],
 
-    // DEPLOYMENT INSTRUCTIONS
-    // Array of shell commands to deploy artifacts to target environments
-    // Best practices:
-    // 1. Use absolute paths for production reliability
-    // 2. Consider atomic deployments (versioned directories + symlink rotation)
-    // 3. Validate filesystem permissions post-deployment
-    \"mouve\": [],
+    // DEPLOYMENT MAPPING
+    // Array of file operations to deploy build artifacts
+    // Each entry specifies:
+    // - \"from\": Source path (relative to repo root)
+    // - \"to\": Absolute destination path on target system
+    \"mouve\": [
+        {{
+            \"from\": \"target/release/myapp\",  // Built binary
+            \"to\": \"/var/www/api.myapp/\"  // Production Directory location
+    }}
+    ],
 
-    // VERSION CONTROL CONFIGURATION
-    // Git repository URL for change tracking and version synchronization
-    // Supports SSH/HTTPS protocols (ensure proper deploy key configuration)
-    \"repo\": \"\",
-
-    // CHANGE DETECTION INTERVAL
-    // Polling frequency (in seconds) for repository change checks
-    // Security/reliability tradeoff: 
-    // - Lower values increase responsiveness
-    // - Higher values reduce API rate limit risks
-    \"interval_in_sec\": \"60\"
-    }} 
-    // DO NOT FORGET REMOVE COMMENTS
+    // REPOSITORY CONFIGURATION
+    // Git repository URL for version control integration
+    // Supports both HTTPS and SSH formats
+    \"repo\": \"https://github.com/MyUser/myapp.git\"
     "
     );
 }

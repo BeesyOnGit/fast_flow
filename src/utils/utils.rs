@@ -5,6 +5,8 @@ use std::{
     process::Command,
 };
 
+use serde::de::DeserializeOwned;
+
 use super::structs::ConfigFile;
 
 pub fn write_to_file_ut(file_path: &String, content: String) -> Result<bool, String> {
@@ -58,7 +60,10 @@ pub async fn execute_commande(commande: &str) -> Result<String, String> {
     }
 }
 
-pub async fn load_config(name: &str, config_path: &str) -> Result<ConfigFile, String> {
+pub async fn load_file_parsed<T>(name: &str, config_path: &str) -> Result<T, String>
+where
+    T: DeserializeOwned,
+{
     // reading the config file to a string
     let file_string = match fs::read_to_string(&format!("{}/{}.config.json", config_path, name)) {
         Ok(file) => file,
@@ -68,7 +73,7 @@ pub async fn load_config(name: &str, config_path: &str) -> Result<ConfigFile, St
     };
 
     // serializing the config string to a struct
-    match serde_json::from_str::<ConfigFile>(&file_string) {
+    match serde_json::from_str::<T>(&file_string) {
         Ok(config) => {
             return Ok(config);
         }
@@ -78,6 +83,20 @@ pub async fn load_config(name: &str, config_path: &str) -> Result<ConfigFile, St
     };
 }
 
-pub fn extract_repo_name(url: &str) -> Option<&str> {
-    return url.split('/').last()?.strip_suffix(".git");
+pub fn extract_repo_info(url: &str) -> Option<(&str, &str)> {
+    let parts: Vec<&str> = url.split('/').collect();
+
+    // We need at least username and repo parts
+    if parts.len() < 2 {
+        return None;
+    }
+
+    // Get the last part (repo) and strip .git suffix
+    let repo = parts.last()?.strip_suffix(".git")?;
+
+    // The username should be second-to-last for standard GitHub URLs
+    // Handle cases like "https://github.com/owner/repo.git"
+    let username = parts.get(parts.len() - 2)?;
+
+    Some((username, repo))
 }

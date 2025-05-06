@@ -1,5 +1,5 @@
 [package]
-name = "watcher"
+name = "fastflow"
 version = "0.1.0"
 edition = "2024"
 

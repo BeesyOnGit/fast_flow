@@ -1,1 +1,1 @@
-sudo rm /usr/local/bin/watcher && cargo build --release && sudo cp ./target/release/watcher /usr/local/bin/ && sudo chmod +x /usr/local/bin/watcher
+sudo rm /usr/local/bin/flow && cargo build --release && sudo cp ./target/release/fastflow /usr/local/bin/flow && sudo chmod +x /usr/local/bin/flow
