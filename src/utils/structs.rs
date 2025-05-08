@@ -25,6 +25,9 @@ pub enum Commands {
 
     /// Display current status of watched repositories in table format
     Status,
+
+    /// Dosplay the logs of the selected tracked repository
+    Log(ConfigArgs),
 }
 
 #[derive(Args)]

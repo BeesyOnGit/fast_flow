@@ -16,6 +16,8 @@ use super::{
     },
 };
 
+use console::Term;
+
 pub fn init_config(name: String, path: &str) -> () {
     let config_path = format!("{path}/{name}.config.json");
 
@@ -383,6 +385,28 @@ pub fn stop_all_track(process_dir: &str, name: Option<String>, silent: bool) -> 
     }
 
     return;
+}
+
+pub fn show_logs(logs_dir: &str, name: String) -> () {
+    let console = Term::stdout();
+    loop {
+        let file_content = match read_from_file_ut(&format!("{}/{}.watch.log", &logs_dir, &name)) {
+            Ok(cont) => {
+                // console.clear_screen().unwrap();
+                // print!("\x1B[2J\x1B[1;1H");
+                print!("{esc}c", esc = 27 as char);
+                cont
+            }
+            Err(err) => {
+                println!("{err}");
+                return;
+            }
+        };
+
+        // let _ = console.write_line(&format!("{}", file_content));
+        println!("{file_content}");
+        thread::sleep(Duration::from_secs(5));
+    }
 }
 
 pub fn show_status(process_dir: &str, logs_dir: &str, config_dir_path: &str) -> () {
