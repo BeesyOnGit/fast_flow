@@ -12,10 +12,10 @@ pub struct Cli {
 pub enum Commands {
     /// Creates a new config file boiler plate
     Config(ConfigArgs),
-    /// Print run
+    /// Starts tracking all the configured repositorys
     Run,
-    /// watches a github repository and pull as soon as there is a change
-    Watch(ConfigArgs),
+    /// Stops the execution of all the configures repositorys  
+    Stop,
 }
 
 #[derive(Args)]
@@ -26,13 +26,15 @@ pub struct ConfigArgs {
     pub name: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct ConfigFile {
     pub repo: String,
     pub build: Vec<String>,
     pub mouve: Vec<FromTo>,
+    pub branche: Option<String>,
+    pub version: Option<String>,
 }
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct FromTo {
     pub from: String,
     pub to: String,

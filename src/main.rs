@@ -3,17 +3,21 @@ mod utils;
 use clap::Parser;
 use utils::{
     structs::{Cli, Commands},
-    subcommands::{init_config, watch_config_repo},
+    subcommands::{init_config, run_flow, stop_all_track},
 };
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let config_path = format!("/etc/rustflow/config");
-    let work_dir = format!("/etc/rustflow/tmp");
+    let app_name = format!("fast_flow");
+    let config_dir_path = format!("/etc/{}/config", &app_name);
+    let work_dir = format!("/etc/{}/tmp", &app_name);
+    let process_dir = format!("/etc/{}/process", &app_name);
+    let logs_dir = format!("/etc/{}/logs", &app_name);
 
     match cli.command {
-        Commands::Config(args) => init_config(args.name, &config_path),
-        Commands::Run => println!("this is run"),
-        Commands::Watch(args) => watch_config_repo(args.name, &work_dir, &config_path).await,
+        Commands::Config(args) => init_config(args.name, &config_dir_path),
+        Commands::Run => run_flow(&work_dir, &process_dir, &logs_dir, &config_dir_path),
+        Commands::Stop => stop_all_track(&process_dir),
     }
 }
