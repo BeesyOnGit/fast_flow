@@ -1,8 +1,12 @@
 use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
+use tabled::Tabled;
 
 #[derive(Parser)]
-#[command(name = "watcher")]
+#[command(
+    name = "flow",
+    about = "A tool for monitoring and managing repository changes"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -10,20 +14,46 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Creates a new config file boiler plate
+    /// Create a new configuration file with boilerplate structure
     Config(ConfigArgs),
-    /// Starts tracking all the configured repositorys
-    Run,
-    /// Stops the execution of all the configures repositorys  
-    Stop,
+
+    /// Start tracking all configured repositories for changes
+    Run(OptConfigArgs),
+
+    /// Stop monitoring of specified or all repositories
+    Stop(OptConfigArgs),
+
+    /// Display current status of watched repositories in table format
+    Status,
 }
 
 #[derive(Args)]
 pub struct ConfigArgs {
-    // #[arg(short, long, default_value = "default")]
-    /// name to use for the config file
-    #[arg(short, long)]
+    /// Specify a name for the configuration file
+    #[arg(short, long, help = "Name of the configuration file to create")]
     pub name: String,
+}
+
+#[derive(Args)]
+pub struct OptConfigArgs {
+    /// Name of the specific process to stop (omit for all processes)
+    #[arg(
+        short,
+        long,
+        help = "Optional: Name of specific repository process to stop"
+    )]
+    pub name: Option<String>,
+}
+
+#[derive(Args)]
+pub struct StatusArgs {
+    /// Show only repositories being actively watched
+    #[arg(short, long, help = "Filter to show only watched repositories")]
+    pub watch: bool,
+
+    /// Show detailed process information
+    #[arg(short, long, help = "Include detailed process statistics")]
+    pub process: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
@@ -31,11 +61,28 @@ pub struct ConfigFile {
     pub repo: String,
     pub build: Vec<String>,
     pub mouve: Vec<FromTo>,
-    pub branche: Option<String>,
+    pub branch: Option<String>,
     pub version: Option<String>,
 }
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct FromTo {
     pub from: String,
     pub to: String,
+}
+#[derive(Debug, Serialize, Deserialize, Tabled)]
+pub struct WatchStats {
+    pub pid: String,
+    pub name: String,
+    pub repo: String,
+    pub branch: String,
+    pub cpu: String,
+    pub memory: String,
+    pub status: String,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SysInfo {
+    pub name: String,
+    pub cpu_usage: String,
+    pub memory: String,
+    pub status: String,
 }

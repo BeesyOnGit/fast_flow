@@ -1,13 +1,19 @@
-use crate::utils::{content::config_example, structs::ConfigFile, utils::load_file_parsed};
+use crate::utils::{
+    content::config_example, structs::ConfigFile, table::watch_status_table,
+    utils::load_file_parsed,
+};
 use daemonize::Daemonize;
 use fern::Dispatch;
 use log::{error, info};
 use std::{thread, time::Duration};
 use tokio::task;
 
-use super::utils::{
-    check_dir_exist_or_create, execute_commande, extract_repo_info, list_dir_contents,
-    read_from_file_ut, write_to_file_ut,
+use super::{
+    structs::{SysInfo, WatchStats},
+    utils::{
+        check_dir_exist_or_create, execute_commande, extract_repo_info, get_sys_info,
+        list_dir_contents, read_from_file_ut, write_to_file_ut,
+    },
 };
 
 pub fn init_config(name: String, path: &str) -> () {
@@ -31,19 +37,40 @@ pub fn init_config(name: String, path: &str) -> () {
     println!("config file boiler plate created go edit it at {config_path} ")
 }
 
-pub fn run_flow(work_dir: &str, process_dir: &str, logs_dir: &str, config_dir_path: &str) -> () {
+pub fn run_flow(
+    work_dir: &str,
+    process_dir: &str,
+    logs_dir: &str,
+    config_dir_path: &str,
+    name: Option<String>,
+) -> () {
     let _ = check_dir_exist_or_create(&format!("{}/example", config_dir_path));
     let _ = check_dir_exist_or_create(&format!("{}/example", work_dir));
     let _ = check_dir_exist_or_create(&format!("{}/example", process_dir));
     let _ = check_dir_exist_or_create(&format!("{}/example", logs_dir));
 
-    let liste = match list_dir_contents(&config_dir_path) {
-        Ok(content) => content,
-        Err(err) => {
-            print!("{}", err.to_string());
-            return;
+    // let liste = match list_dir_contents(&config_dir_path) {
+    //     Ok(content) => content,
+    //     Err(err) => {
+    //         print!("{}", err.to_string());
+    //         return;
+    //     }
+    // };
+    let mut liste: Vec<String> = Vec::new();
+
+    if name.is_none() {
+        liste = match list_dir_contents(&config_dir_path) {
+            Ok(content) => content,
+            Err(err) => {
+                print!("{}", err.to_string());
+                return;
+            }
         }
-    };
+    }
+
+    if name.is_some() {
+        liste.push(format!("{}.config.json", name.unwrap()));
+    }
 
     let mut names = Vec::<String>::new();
 
@@ -57,8 +84,8 @@ pub fn run_flow(work_dir: &str, process_dir: &str, logs_dir: &str, config_dir_pa
     let logs_dir = logs_dir.to_owned();
     let config_dir_path = config_dir_path.to_owned();
 
-    // stop all current running processes befor starting new ones
-    let _ = stop_all_track(&process_dir);
+    // // stop all current running processes befor starting new ones
+    // let _ = stop_all_track(&process_dir, None, true);
 
     for name in names {
         let work_dir = work_dir.clone();
@@ -84,14 +111,21 @@ pub fn daemonizer(
     let pid_file_name = &format!("{}/{}.watch.pid", &process_dir, &name);
     let log_path = format!("{}/{}.watch.log", &logs_dir, &name);
 
+    match read_from_file_ut(&pid_file_name) {
+        Ok(pid) => {
+            let _ = execute_commande(&format!("kill {}", pid.trim()));
+        }
+        Err(_) => {}
+    }
+
     // Daemonize to detach from the terminal and run in the background
     let daemonize = Daemonize::new()
         .pid_file(pid_file_name) // Prevent multiple instances
         .chown_pid_file(true) // Allow writing to the PID file
         .working_directory(".")
         .stdout(fern::log_file(&log_path).unwrap()) // Redirect stdout to log
-        .stderr(fern::log_file(&log_path).unwrap()) // Redirect stderr to log
-        .privileged_action(|| println!("Background process started"));
+        .stderr(fern::log_file(&log_path).unwrap()); // Redirect stderr to log
+    // .privileged_action(|| println!("Background process started"));
 
     match daemonize.start() {
         Ok(_) => {
@@ -111,11 +145,7 @@ pub fn daemonizer(
                 .expect("Failed to initialize logger");
 
             info!("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-            info!(
-                "[{}] : new instance watching [{}] ",
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-                &name
-            );
+            info!("Started New instance watching [{}] ", &name);
             info!("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
             loop {
                 // Run the flow
@@ -127,6 +157,33 @@ pub fn daemonizer(
         Err(e) => eprintln!("Failed to start daemon: {}", e),
     }
 }
+
+// change the name of the daemonized process TODO!
+// use libc;
+// use std::ffi::CString;
+// fn set_process_name(name: &str) {
+//     let c_name = CString::new(name).unwrap();
+//     unsafe {
+//         // Linux-specific
+//         libc::prctl(libc::PR_SET_NAME, c_name.as_ptr() as libc::c_ulong);
+
+//         // BSD/MacOS alternative
+//         #[cfg(target_os = "macos")]
+//         libc::pthread_setname_np(c_name.as_ptr());
+
+//         // For argv[0] (visible in ps/top)
+//         libc::strncpy(
+//             std::env::args().next().unwrap().as_ptr() as *mut libc::c_char,
+//             c_name.as_ptr(),
+//             name.len()
+//         );
+//     }
+// }
+
+// // Usage with daemonize:
+// Daemonize::new()
+//     .privileged_action(|| set_process_name("my_custom_daemon"))
+//     .start();
 
 pub fn watch_config_repo(name: &str, work_dir: &str, config_dir_path: &str) -> () {
     let config_file_path = format!("{}/{}.config.json", config_dir_path, &name);
@@ -146,7 +203,7 @@ pub fn watch_config_repo(name: &str, work_dir: &str, config_dir_path: &str) -> (
         repo,
         mouve,
         version,
-        branche,
+        branch,
     } = config.clone();
 
     let curr_version = match version {
@@ -154,7 +211,7 @@ pub fn watch_config_repo(name: &str, work_dir: &str, config_dir_path: &str) -> (
         None => String::new(),
     };
 
-    let actual_branche = match branche {
+    let actual_branch = match branch {
         Some(b) => b,
         None => "main".to_string(),
     };
@@ -164,7 +221,7 @@ pub fn watch_config_repo(name: &str, work_dir: &str, config_dir_path: &str) -> (
 
     info!(
         "Fetching the most recent version for branch {}",
-        &actual_branche
+        &actual_branch
     );
 
     // Extract the user name and repo
@@ -186,7 +243,7 @@ pub fn watch_config_repo(name: &str, work_dir: &str, config_dir_path: &str) -> (
     // Fetch the current repo version
     let fetch_version = match execute_commande(&format!(
         "git ls-remote git@github.com:{}/{}.git {:?}",
-        &username, &folder_name, &actual_branche
+        &username, &folder_name, &actual_branch
     )) {
         Ok(v) => v.trim().split("refs").next().unwrap().to_string(),
         Err(err) => {
@@ -197,13 +254,13 @@ pub fn watch_config_repo(name: &str, work_dir: &str, config_dir_path: &str) -> (
 
     // If the current version is the newest do nothing
     if curr_version == fetch_version {
-        info!("No changes to ... all is good");
+        info!("Up to date with branch");
         return;
     }
 
     // refreshing the controle version
     config.version = Some(fetch_version);
-    config.branche = Some(actual_branche);
+    config.branch = Some(actual_branch);
 
     // Clone repository in local
     match execute_commande(&format!(
@@ -276,21 +333,39 @@ pub fn watch_config_repo(name: &str, work_dir: &str, config_dir_path: &str) -> (
     return ();
 }
 
-pub fn stop_all_track(process_dir: &str) -> () {
-    let liste = match list_dir_contents(&process_dir) {
-        Ok(content) => content,
-        Err(err) => {
-            println!("{}", err.to_string());
-            return;
-        }
-    };
+pub fn stop_all_track(process_dir: &str, name: Option<String>, silent: bool) -> () {
+    let mut liste: Vec<String> = Vec::new();
+
+    if name.is_none() {
+        liste = match list_dir_contents(&process_dir) {
+            Ok(content) => content,
+            Err(err) => {
+                if silent == true {
+                    return;
+                }
+                println!("{}", err.to_string());
+                return;
+            }
+        };
+    }
+
+    if name.is_some() {
+        liste.push(format!("{}.watch.pid", name.unwrap()));
+    }
 
     if liste.len() == 0 {
+        if silent == true {
+            return;
+        }
+
         println!("You have No process running to stop!");
         return;
     }
 
-    println!("Identified {} Runing processes", &liste.len());
+    if silent != true {
+        println!("Shutting down {} Runing processes", &liste.len());
+    }
+
     for elem in liste {
         let tmp_pid = match read_from_file_ut(&format!("{}/{}", &process_dir, &elem)) {
             Ok(content) => content,
@@ -299,9 +374,109 @@ pub fn stop_all_track(process_dir: &str) -> () {
                 continue;
             }
         };
-        let _ = execute_commande(&format!("kill {}", &tmp_pid));
+        let _ = execute_commande(&format!("kill {}", &tmp_pid.trim()));
+        let _ = execute_commande(&format!("rm -rf {}/{}", &process_dir, &elem));
     }
-    println!("all your repositories tracking was terminated");
-    let _ = execute_commande(&format!("rm -rf {process_dir}/*"));
+
+    if silent != true {
+        println!("all your repositories tracking was terminated");
+    }
+
     return;
+}
+
+pub fn show_status(process_dir: &str, logs_dir: &str, config_dir_path: &str) -> () {
+    let liste = match list_dir_contents(&config_dir_path) {
+        Ok(content) => content,
+        Err(err) => {
+            println!("{}", err.to_string());
+            return;
+        }
+    };
+
+    if liste.len() == 0 {
+        println!("You have No Repositorys being watched right now!");
+        return;
+    }
+    let mut data: Vec<WatchStats> = Vec::new();
+
+    for file_name in liste {
+        let config =
+            match load_file_parsed::<ConfigFile>(&format!("{}/{}", &config_dir_path, &file_name)) {
+                Ok(conf) => conf,
+                Err(err) => {
+                    println!("{}", err);
+                    continue;
+                }
+            };
+
+        let ConfigFile {
+            repo,
+            build: _,
+            mouve: _,
+            branch,
+            version: _,
+        } = config;
+
+        // Extract the user name and repo
+        let repo_info = match extract_repo_info(&repo) {
+            Some(rep) => rep,
+            None => {
+                println!("error while parsing your github repo to extract the name, check it");
+                return;
+            }
+        };
+
+        // extracting username and repository from repo string
+        let (username, folder_name) = repo_info;
+
+        let name: Vec<&str> = file_name.split(".").collect();
+
+        let pid = match read_from_file_ut(&format!("{}/{}.watch.pid", &process_dir, &name[0])) {
+            Ok(content) => content.trim().to_string(),
+            Err(_err) => {
+                let data_elem = WatchStats {
+                    name: format!("{}", name[0]),
+                    pid: "N/A".to_string(),
+                    repo: format!("{username}/{folder_name}.git"),
+                    branch: branch.unwrap_or("main".to_string()),
+                    cpu: "N/A".to_string(),
+                    memory: "N/A".to_string(),
+                    status: "unwatched".to_string(),
+                };
+
+                data.push(data_elem);
+                continue;
+            }
+        };
+
+        let sys_info = match get_sys_info(&pid) {
+            Ok(sy) => sy,
+            Err(err) => {
+                println!("{}", err);
+                continue;
+            }
+        };
+
+        let SysInfo {
+            name: _,
+            cpu_usage,
+            memory,
+            status: _,
+        } = sys_info;
+
+        let data_elem = WatchStats {
+            name: format!("{}", name[0]),
+            pid,
+            repo: format!("{username}/{folder_name}.git"),
+            branch: branch.unwrap_or("main".to_string()),
+            cpu: cpu_usage,
+            memory: memory,
+            status: "watched".to_string(),
+        };
+
+        data.push(data_elem);
+    }
+    let table = watch_status_table(data, "Fast Flow Watching Status");
+    println!("{table}");
 }

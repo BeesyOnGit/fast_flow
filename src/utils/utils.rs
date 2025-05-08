@@ -6,6 +6,9 @@ use std::{
     path::Path,
     process::Command,
 };
+use sysinfo::System;
+
+use super::structs::SysInfo;
 
 pub fn write_to_file_ut(file_path: &str, content: &str) -> Result<bool, String> {
     // Create all directories in the path if they don't exist
@@ -139,4 +142,34 @@ pub fn list_dir_contents(path: &str) -> Result<Vec<String>, bool> {
         content.push(str_file);
     }
     return Ok(content);
+}
+
+pub fn get_sys_info(pid_str: &str) -> Result<SysInfo, bool> {
+    let pid: usize = match pid_str.parse() {
+        Ok(num) => num,
+        Err(err) => {
+            println!("error : {}", err);
+            return Err(false);
+        }
+    };
+    let mut system = System::new_all();
+    system.refresh_all();
+
+    match system.process(pid.into()) {
+        Some(process) => {
+            let mem: f32 = process.memory() as f32 / 1_000_000 as f32;
+            return Ok(SysInfo {
+                name: format!("{:?}", process.name()),
+                cpu_usage: format!("{}%", process.cpu_usage()),
+                memory: format!("{:.2}mb", mem),
+                status: format!("{}", process.status()),
+            });
+        }
+        None => Err(false),
+    }
+
+    // println!("Name: {}", process.name());
+    // println!("CPU usage: {}%", process.cpu_usage());
+    // println!("Memory: {} KB", process.memory());
+    // println!("Status: {:?}", process.status());
 }
