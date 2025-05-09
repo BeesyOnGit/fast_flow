@@ -2,7 +2,7 @@ use tabled::{
     Table, Tabled,
     settings::{
         Alignment, Border, Color, Padding, Panel, Style, Width,
-        object::{Columns, Object, ObjectIterator, Rows, Segment},
+        object::{Columns, Object, Rows, Segment},
         style::{BorderColor, HorizontalLine},
     },
 };

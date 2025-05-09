@@ -18,7 +18,7 @@ pub enum Commands {
     Config(ConfigArgs),
 
     /// Start tracking all configured repositories for changes
-    Run(OptConfigArgs),
+    Watch(OptConfigArgs),
 
     /// Stop monitoring of specified or all repositories
     Stop(OptConfigArgs),
@@ -26,8 +26,11 @@ pub enum Commands {
     /// Display current status of watched repositories in table format
     Status,
 
-    /// Dosplay the logs of the selected tracked repository
+    /// Display the logs of the selected tracked repository
     Log(ConfigArgs),
+
+    /// Start the execution of the selected application in a new process
+    Start(OptConfigArgs),
 }
 
 #[derive(Args)]
@@ -66,6 +69,7 @@ pub struct ConfigFile {
     pub mouve: Vec<FromTo>,
     pub branch: Option<String>,
     pub version: Option<String>,
+    pub entry_point: Option<String>,
 }
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct FromTo {

@@ -3,7 +3,7 @@ mod utils;
 use clap::Parser;
 use utils::{
     structs::{Cli, Commands},
-    subcommands::{init_config, run_flow, show_logs, show_status, stop_all_track},
+    subcommands::{init_config, run_flow, show_logs, show_status, stop_all_track, watch_repo},
 };
 
 #[tokio::main]
@@ -17,7 +17,7 @@ async fn main() {
 
     match cli.command {
         Commands::Config(args) => init_config(args.name, &config_dir_path),
-        Commands::Run(args) => run_flow(
+        Commands::Watch(args) => watch_repo(
             &work_dir,
             &process_dir,
             &logs_dir,
@@ -27,5 +27,12 @@ async fn main() {
         Commands::Stop(args) => stop_all_track(&process_dir, args.name, false),
         Commands::Status => show_status(&process_dir, &logs_dir, &config_dir_path),
         Commands::Log(args) => show_logs(&logs_dir, args.name),
+        Commands::Start(args) => run_flow(
+            &work_dir,
+            &process_dir,
+            &logs_dir,
+            &config_dir_path,
+            args.name,
+        ),
     }
 }
