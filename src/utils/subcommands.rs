@@ -1,16 +1,19 @@
 use crate::utils::{
-    content::config_example, structs::ConfigFile, table::watch_status_table,
-    utils::load_file_parsed,
+    content::config_example,
+    structs::ConfigFile,
+    table::watch_status_table,
+    utils::{load_file_parsed, prompt_user},
 };
-use std::{thread, time::Duration};
+use std::{process::Command, thread, time::Duration};
 use tokio::task;
 
 use super::{
     daemon::daemonizer,
     structs::{SysInfo, WatchStats},
     utils::{
-        check_dir_exist_or_create, execute_commande, extract_repo_info, get_sys_info,
-        list_dir_contents, read_from_file_ut, start_process, watch_config_repo, write_to_file_ut,
+        check_dir_exist_or_create, check_or_create_entry_point, execute_commande,
+        extract_repo_info, get_process_runner, get_sys_info, list_dir_contents, read_from_file_ut,
+        watch_config_repo, write_to_file_ut,
     },
 };
 
@@ -82,8 +85,8 @@ pub fn watch_repo(
         let config_dir_path = config_dir_path.clone();
 
         let config_file_path = format!("{}/{}.config.json", &config_dir_path, &name);
-        let pid_file_path = format!("{}/{}.process.pid", &process_dir, &name);
-        let log_file_path = format!("{}/{}.process.log", &logs_dir, &name);
+        let pid_file_path = format!("{}/{}.watch.pid", &process_dir, &name);
+        let log_file_path = format!("{}/{}.watch.log", &logs_dir, &name);
 
         // daemonizer is fully blocking, so use the blocking thread-pool
         task::spawn_blocking(move || {
@@ -98,6 +101,7 @@ pub fn watch_repo(
         });
     }
 }
+
 pub fn run_flow(
     work_dir: &str,
     process_dir: &str,
@@ -145,21 +149,53 @@ pub fn run_flow(
         let config_dir_path = config_dir_path.clone();
 
         let config_file_path = format!("{}/{}.config.json", &config_dir_path, &name);
-        let pid_file_path = format!("{}/{}.watch.pid", &process_dir, &name);
-        let log_file_path = format!("{}/{}.watch.log", &logs_dir, &name);
-        start_process(&config_file_path);
+        let pid_file_path = format!("{}/{}.process.pid", &process_dir, &name);
+        let log_file_path = format!("{}/{}.process.log", &logs_dir, &name);
 
-        // // daemonizer is fully blocking, so use the blocking thread-pool
-        // task::spawn_blocking(move || {
-        //     daemonizer(
-        //         name,
-        //         &work_dir,
-        //         &config_file_path,
-        //         &pid_file_path,
-        //         &log_file_path,
-        //         watch_config_repo,
-        //     );
-        // });
+        let mut config = match load_file_parsed::<ConfigFile>(&config_file_path) {
+            Ok(conf) => conf,
+            Err(err) => {
+                println!("err loading");
+                println!("{err}");
+                return;
+            }
+        };
+
+        match check_or_create_entry_point(&config_file_path, &mut config, &name) {
+            Ok(_) => {
+                println!("Entry point(s) saved to config");
+            }
+            Err(err) => {
+                println!("{}", err);
+                return;
+            }
+        };
+
+        for entry in config.entry_point.unwrap() {
+            if entry.as_ref().is_none() {
+                continue;
+            }
+
+            let runner =
+                match get_process_runner(&entry.as_ref().unwrap().split("/").last().unwrap()) {
+                    Ok(run) => run,
+                    Err(err) => {
+                        println!("{err}");
+                        return;
+                    }
+                };
+
+            let output = Command::new(entry.unwrap())
+                .arg("-l")
+                .arg("-a")
+                .output()
+                .expect("Failed to execute command");
+
+            // Print command output
+            println!("Status: {}", output.status);
+            println!("Stdout: {}", String::from_utf8_lossy(&output.stdout));
+            println!("Stderr: {}", String::from_utf8_lossy(&output.stderr));
+        }
     }
 }
 

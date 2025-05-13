@@ -1,7 +1,8 @@
 use log::{error, info};
 use serde::de::DeserializeOwned;
 use std::{
-    fs::{self, OpenOptions, create_dir_all, read_to_string},
+    collections::HashMap,
+    fs::{self, File, OpenOptions, create_dir_all, read_to_string},
     io::{self, Read, Write},
     os::unix::ffi::OsStrExt,
     path::Path,
@@ -11,7 +12,7 @@ use sysinfo::System;
 
 use crate::utils::structs::ConfigFile;
 
-use super::structs::SysInfo;
+use super::structs::{FromTo, SysInfo};
 
 pub fn write_to_file_ut(file_path: &str, content: &str) -> Result<bool, String> {
     // Create all directories in the path if they don't exist
@@ -55,6 +56,7 @@ pub fn prompt_user(str: &str) -> Result<String, String> {
     let input = String::from(input.trim().to_lowercase());
     return Ok(input);
 }
+
 pub fn check_dir_exist_or_create(file_path: &str) -> () {
     let tmp_path = format!("{}", file_path);
     // Convert the file path to a Path
@@ -340,40 +342,7 @@ pub fn watch_config_repo(work_dir: &str, config_file_path: &str) -> () {
     return ();
 }
 
-pub fn start_process(config_file_path: &str) -> () {
-    let mut config: ConfigFile = match load_file_parsed(config_file_path) {
-        Ok(content) => content,
-        Err(err) => {
-            error!("{}", err);
-            return;
-        }
-    };
-
-    loop {
-        if config.entry_point.is_some() {
-            // check if user inputed an empty string
-            if config.entry_point.unwrap().trim() == "" {
-                println!("The entry point you provided don't exist ");
-                return;
-            }
-
-            break;
-        }
-
-        match prompt_user("") {
-            Ok(res) => {
-                config.entry_point = Some(res);
-            }
-            Err(err) => {
-                println!("{}", err);
-            }
-        }
-    }
-
-    let extention = check_existing_runner("js");
-}
-
-pub fn check_existing_runner(extention: &str) -> Result<bool, bool> {
+pub fn check_existing_runner(extention: &str) -> Result<&str, String> {
     use std::collections::HashMap;
 
     // (file-extension, (runner, args-to-print-version))
@@ -397,7 +366,7 @@ pub fn check_existing_runner(extention: &str) -> Result<bool, bool> {
     // for (ext, (cmd, args)) in &runners {
     match Command::new(cmd).args(*args).status() {
         Ok(status) if status.success() => {
-            return Ok(true);
+            return Ok(cmd);
             // println!("✔ `{}` runner for .{} is installed", cmd, ext);
         }
         Err(_err) => {
@@ -409,19 +378,157 @@ pub fn check_existing_runner(extention: &str) -> Result<bool, bool> {
                 "Please install `{}` to be able to run .{} file",
                 cmd, &extention
             );
-            return Err(false);
-        }
-        _ => {
-            eprintln!(
-                "✖ `{}` (for .{}) not found or returned error",
-                cmd, &extention
-            );
-            eprintln!(
+            return Err(format!(
                 "Please install `{}` to be able to run .{} file",
                 cmd, &extention
-            );
-            return Err(false);
+            ));
+        }
+        _ => {
+            return Err(format!(
+                "✖ [{}] (for .{}) not found or returned error \n Please install [{}] to be able to run .{} file",
+                cmd, &extention, cmd, &extention
+            ));
         }
     }
     // }
+}
+
+pub fn get_process_runner(entry_point: &str) -> Result<String, String> {
+    if !entry_point.contains(".") {
+        return Ok("bash".to_string());
+    }
+
+    let entry_split: Vec<&str> = entry_point.split(".").collect();
+
+    let extention = entry_split.last();
+
+    match check_existing_runner(extention.unwrap()) {
+        Ok(cm) => return Ok(cm.to_string()),
+        Err(er) => {
+            return Err(er);
+        }
+    };
+}
+
+pub fn run_binary() -> () {}
+
+pub fn check_or_create_entry_point(
+    config_file_path: &str,
+    config: &mut ConfigFile,
+    name: &str,
+) -> Result<bool, String> {
+    for target in config.mouve.clone() {
+        let FromTo { from: _, mut to } = target;
+
+        if config.entry_point.is_none() {
+            config.entry_point = Some(Vec::new());
+        }
+
+        let mut already_setup = false;
+
+        for entry_p in config.entry_point.as_mut().unwrap() {
+            if entry_p.is_some() && entry_p.clone().unwrap().contains(&to.clone()) {
+                already_setup = true;
+                break;
+            }
+        }
+
+        if already_setup {
+            continue;
+        }
+
+        loop {
+            let entry = match prompt_user(&format!(
+                "Please insert your entry point name for the app [{name}] located at the folder {to}"
+            )) {
+                Ok(res) => Some(res),
+                Err(err) => {
+                    println!("{}", err);
+                    Some(format!(""))
+                }
+            };
+            let unwraped_entry = entry.unwrap();
+
+            if unwraped_entry.trim() == "" {
+                println!("Please insert a valid name, not an empty string");
+                continue;
+            }
+            println!("{}/{}", &to, &unwraped_entry);
+            let is_dir = match is_directory(&format!("{}/{}", &to, &unwraped_entry)) {
+                Ok(res) => res,
+                Err(err) => {
+                    println!("{err}");
+                    continue;
+                }
+            };
+
+            if is_dir {
+                println!(
+                    "The entry point you provided is a directory, Please provide the name of a valid file or binary"
+                );
+                continue;
+            }
+
+            // let y = to.chars().nth(n).unwrap();
+            if to.chars().nth(to.len() - 1).unwrap() == '/' {
+                to.pop();
+            };
+
+            let entry_string = format!("{}/{}", &to, &unwraped_entry);
+
+            config
+                .entry_point
+                .as_mut()
+                .unwrap()
+                .push(Some(entry_string));
+
+            break;
+        }
+    }
+    match execute_commande(&format!("rm {}", &config_file_path)) {
+        Ok(_) => {
+            let _ = write_to_file_ut(
+                &config_file_path,
+                &serde_json::to_string_pretty::<ConfigFile>(&config).unwrap(),
+            );
+            return Ok(true);
+        }
+        Err(err) => {
+            return Err(err);
+        }
+    }
+}
+
+pub fn is_directory(path_to_check: &str) -> Result<bool, String> {
+    let metadata = match fs::metadata(path_to_check) {
+        Ok(data) => data,
+        Err(err) => {
+            return Err(err.to_string());
+        }
+    };
+
+    return Ok(metadata.is_dir());
+}
+
+fn load_env_file(path: &str) -> Result<HashMap<String, String>, String> {
+    let mut vars = HashMap::new();
+
+    let contents = match fs::read_to_string(path) {
+        Ok(cont) => cont,
+        Err(err) => {
+            return Err(err.to_string());
+        }
+    };
+
+    for line in contents.lines() {
+        if line.starts_with('#') && !line.contains('=') {
+            continue;
+        }
+        let parts: Vec<_> = line.splitn(2, '=').collect();
+        if parts.len() == 2 {
+            vars.insert(parts[0].trim().to_string(), parts[1].trim().to_string());
+        }
+    }
+
+    return Ok(vars);
 }

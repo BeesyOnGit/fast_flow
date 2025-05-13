@@ -20,6 +20,8 @@ pub fn config_example() -> String {
     }}
     ],
 
+    entry_point:[],
+
     // REPOSITORY CONFIGURATION
     // Git repository URL for version control integration
     // Supports both HTTPS and SSH formats

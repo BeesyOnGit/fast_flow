@@ -69,7 +69,7 @@ pub struct ConfigFile {
     pub mouve: Vec<FromTo>,
     pub branch: Option<String>,
     pub version: Option<String>,
-    pub entry_point: Option<String>,
+    pub entry_point: Option<Vec<Option<String>>>,
 }
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct FromTo {
