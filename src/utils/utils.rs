@@ -14,32 +14,6 @@ use crate::utils::structs::ConfigFile;
 
 use super::structs::{FromTo, SysInfo};
 
-pub fn write_to_file_ut(file_path: &str, content: &str) -> Result<bool, String> {
-    // Create all directories in the path if they don't exist
-    check_dir_exist_or_create(&file_path);
-
-    // Open or create the file
-    let mut file = match OpenOptions::new().create(true).append(true).open(file_path) {
-        Ok(f) => f,
-        Err(err) => return Err(format!("Failed to open file: {}", err)),
-    };
-
-    // Write the content
-    match file.write_all(content.as_bytes()) {
-        Ok(_) => Ok(true),
-        Err(err) => Err(format!("Failed to write to file: {}", err)),
-    }
-}
-
-pub fn read_from_file_ut(file_path: &str) -> Result<String, String> {
-    match read_to_string(file_path) {
-        Ok(f) => return Ok(f),
-        Err(err) => {
-            return Err(err.to_string());
-        }
-    };
-}
-
 pub fn prompt_user(str: &str) -> Result<String, String> {
     // Prompt the user for input
     println!("{} : ", str);
@@ -57,19 +31,6 @@ pub fn prompt_user(str: &str) -> Result<String, String> {
     return Ok(input);
 }
 
-pub fn check_dir_exist_or_create(file_path: &str) -> () {
-    let tmp_path = format!("{}", file_path);
-    // Convert the file path to a Path
-    let path = Path::new::<String>(&tmp_path);
-
-    // Create all directories in the path if they don't exist
-    if let Some(parent) = path.parent() {
-        if let Err(err) = create_dir_all(parent) {
-            println!("Failed to create directories: {}", err);
-        }
-    }
-}
-
 pub fn execute_commande(commande: &str) -> Result<String, String> {
     match Command::new("sh").arg("-c").arg(commande).output() {
         Ok(output) => {
@@ -81,29 +42,6 @@ pub fn execute_commande(commande: &str) -> Result<String, String> {
         }
         Err(err) => Err(err.to_string()),
     }
-}
-
-pub fn load_file_parsed<T>(config_path: &str) -> Result<T, String>
-where
-    T: DeserializeOwned,
-{
-    // reading the config file to a string
-    let file_string = match fs::read_to_string(config_path) {
-        Ok(file) => file,
-        Err(err) => {
-            return Err(err.to_string());
-        }
-    };
-
-    // serializing the config string to a struct
-    match serde_json::from_str::<T>(&file_string) {
-        Ok(config) => {
-            return Ok(config);
-        }
-        Err(err) => {
-            return Err(err.to_string());
-        }
-    };
 }
 
 pub fn extract_repo_info(url: &str) -> Option<(&str, &str)> {
@@ -122,47 +60,6 @@ pub fn extract_repo_info(url: &str) -> Option<(&str, &str)> {
     let username = parts.get(parts.len() - 2)?;
 
     Some((username, repo))
-}
-
-pub fn list_dir_contents(path: &str) -> Result<Vec<String>, bool> {
-    let dir_content = match fs::read_dir(path) {
-        Ok(content) => content,
-        Err(err) => {
-            print!("{}", err.to_string());
-            return Err(false);
-        }
-    };
-
-    let mut content = Vec::<String>::new();
-
-    for entry in dir_content {
-        let curr_entry = match entry {
-            Ok(curr_entry) => curr_entry,
-            Err(err) => {
-                print!("{}", err.to_string());
-                continue;
-            }
-        };
-
-        let path = curr_entry.path();
-
-        if path.is_dir() {
-            continue;
-        }
-
-        let y = match path.file_name() {
-            Some(f_name) => f_name,
-            None => {
-                continue;
-            }
-        };
-        let mut str_file = String::new();
-
-        let _ = y.as_bytes().read_to_string(&mut str_file);
-
-        content.push(str_file);
-    }
-    return Ok(content);
 }
 
 pub fn get_sys_info(pid_str: &str) -> Result<SysInfo, bool> {
@@ -497,17 +394,6 @@ pub fn check_or_create_entry_point(
             return Err(err);
         }
     }
-}
-
-pub fn is_directory(path_to_check: &str) -> Result<bool, String> {
-    let metadata = match fs::metadata(path_to_check) {
-        Ok(data) => data,
-        Err(err) => {
-            return Err(err.to_string());
-        }
-    };
-
-    return Ok(metadata.is_dir());
 }
 
 fn load_env_file(path: &str) -> Result<HashMap<String, String>, String> {
